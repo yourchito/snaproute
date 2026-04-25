@@ -1,83 +1,88 @@
-import { describe, it, expect } from 'vitest';
-import {
-  generateDocs,
-  extractParams,
-  formatDocsAsMarkdown,
-  RouteDoc,
-} from './generateDocs';
-import { RouteConfig } from '../config/snaproute.config';
+import { describe, it, expect } from "vitest";
+import { extractParams, generateDocs, formatDocsAsMarkdown } from "./generateDocs";
+import type { ParsedArgs } from "../cli/parseArgs";
 
-const mockRoutes: RouteConfig[] = [
-  {
-    path: '/api/users',
-    methods: ['GET', 'POST'],
-    description: 'List and create users',
-  },
-  {
-    path: '/api/users/[id]',
-    methods: ['GET', 'PUT', 'DELETE'],
-    description: 'Manage a single user by ID',
-  },
-  {
-    path: '/api/posts/[postId]/comments/[commentId]',
-  },
-];
+const baseArgs: ParsedArgs = {
+  routeName: "users",
+  methods: ["get", "post"],
+  outputDir: "pages/api",
+  preview: false,
+  docs: false,
+};
 
-describe('extractParams', () => {
-  it('returns empty object for paths with no params', () => {
-    expect(extractParams('/api/users')).toEqual({});
+describe("extractParams", () => {
+  it("returns empty array for static routes", () => {
+    expect(extractParams("users")).toEqual([]);
   });
 
-  it('extracts a single param', () => {
-    expect(extractParams('/api/users/[id]')).toEqual({ id: 'string' });
+  it("extracts a single dynamic param", () => {
+    expect(extractParams("users/[id]")).toEqual(["id"]);
   });
 
-  it('extracts multiple params', () => {
-    expect(
-      extractParams('/api/posts/[postId]/comments/[commentId]')
-    ).toEqual({ postId: 'string', commentId: 'string' });
+  it("extracts multiple dynamic params", () => {
+    expect(extractParams("users/[userId]/posts/[postId]")).toEqual(["userId", "postId"]);
+  });
+
+  it("handles catch-all segments", () => {
+    expect(extractParams("blog/[...slug]")).toEqual(["...slug"]);
   });
 });
 
-describe('generateDocs', () => {
-  it('returns one doc per route', () => {
-    const docs = generateDocs(mockRoutes);
-    expect(docs).toHaveLength(3);
+describe("generateDocs", () => {
+  it("returns a RouteDoc with correct name and methods", () => {
+    const doc = generateDocs(baseArgs);
+    expect(doc.name).toBe("users");
+    expect(doc.methods).toEqual(["get", "post"]);
   });
 
-  it('uses default method GET when none provided', () => {
-    const docs = generateDocs([{ path: '/api/health' }]);
-    expect(docs[0].methods).toEqual(['GET']);
+  it("extracts params from routeName", () => {
+    const doc = generateDocs({ ...baseArgs, routeName: "users/[id]" });
+    expect(doc.params).toEqual(["id"]);
   });
 
-  it('includes generatedAt timestamp', () => {
-    const docs = generateDocs(mockRoutes);
-    expect(docs[0].generatedAt).toBeTruthy();
+  it("uses default outputDir when not provided", () => {
+    const doc = generateDocs({ ...baseArgs, outputDir: undefined });
+    expect(doc.outputDir).toBe("pages/api");
   });
 
-  it('populates params from dynamic segments', () => {
-    const docs = generateDocs(mockRoutes);
-    expect(docs[1].params).toEqual({ id: 'string' });
+  it("includes a generatedAt timestamp", () => {
+    const doc = generateDocs(baseArgs);
+    expect(new Date(doc.generatedAt).toString()).not.toBe("Invalid Date");
   });
 });
 
-describe('formatDocsAsMarkdown', () => {
-  it('includes the main heading', () => {
-    const docs = generateDocs(mockRoutes);
-    const md = formatDocsAsMarkdown(docs);
-    expect(md).toContain('# API Routes Documentation');
+describe("formatDocsAsMarkdown", () => {
+  it("includes the route name as a heading", () => {
+    const doc = generateDocs(baseArgs);
+    const md = formatDocsAsMarkdown(doc);
+    expect(md).toContain("# Route: `users`");
   });
 
-  it('includes each route path as a heading', () => {
-    const docs = generateDocs(mockRoutes);
-    const md = formatDocsAsMarkdown(docs);
-    expect(md).toContain('## `/api/users`');
-    expect(md).toContain('## `/api/users/[id]`');
+  it("lists all methods", () => {
+    const doc = generateDocs(baseArgs);
+    const md = formatDocsAsMarkdown(doc);
+    expect(md).toContain("`GET`");
+    expect(md).toContain("`POST`");
   });
 
-  it('lists path parameters when present', () => {
-    const docs = generateDocs(mockRoutes);
-    const md = formatDocsAsMarkdown(docs);
-    expect(md).toContain('`id`');
+  it("includes dynamic params section when params exist", () => {
+    const doc = generateDocs({ ...baseArgs, routeName: "users/[id]" });
+    const md = formatDocsAsMarkdown(doc);
+    expect(md).toContain("## Dynamic Parameters");
+    expect(md).toContain("`id`");
+  });
+
+  it("omits dynamic params section for static routes", () => {
+    const doc = generateDocs(baseArgs);
+    const md = formatDocsAsMarkdown(doc);
+    expect(md).not.toContain("## Dynamic Parameters");
+  });
+
+  it("includes a handler signature code block", () => {
+    const doc = generateDocs(baseArgs);
+    const md = formatDocsAsMarkdown(doc);
+    expect(md).toContain("## Handler Signature");
+    expect(md).toContain("```ts");
+    expect(md).toContain("NextApiRequest");
   });
 });
