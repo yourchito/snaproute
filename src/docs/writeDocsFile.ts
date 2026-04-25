@@ -19,6 +19,10 @@ export function writeDocsFile(
 ): string {
   const { outputDir, docsFileName = "API_DOCS.md", append = false } = options;
 
+  if (routes.length === 0) {
+    throw new Error("No routes provided to writeDocsFile.");
+  }
+
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
