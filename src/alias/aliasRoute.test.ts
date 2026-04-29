@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import {
   resolveAliasFilePath,
   loadAliases,
@@ -9,139 +9,124 @@ import {
   addAlias,
   resolveAlias,
   removeAlias,
-} from "./aliasRoute";
+} from './aliasRoute';
 
 function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "snaproute-alias-test-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'snaproute-alias-test-'));
 }
 
-describe("resolveAliasFilePath", () => {
-  it("returns a path ending in .snaproute-aliases.json", () => {
-    const result = resolveAliasFilePath("/some/dir");
+describe('resolveAliasFilePath', () => {
+  it('returns a path ending in .snaproute-aliases.json', () => {
+    const result = resolveAliasFilePath('/some/dir');
     expect(result).toMatch(/\.snaproute-aliases\.json$/);
   });
 
-  it("resolves relative to provided base dir", () => {
-    const result = resolveAliasFilePath("/my/project");
-    expect(result).toBe("/my/project/.snaproute-aliases.json");
+  it('resolves relative to the given base directory', () => {
+    const result = resolveAliasFilePath('/projects/myapp');
+    expect(result).toBe('/projects/myapp/.snaproute-aliases.json');
   });
 });
 
-describe("loadAliases", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = makeTempDir();
+describe('loadAliases', () => {
+  it('returns an empty object if file does not exist', () => {
+    const tmpDir = makeTempDir();
+    const result = loadAliases(tmpDir);
+    expect(result).toEqual({});
+    fs.rmSync(tmpDir, { recursive: true });
   });
 
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  it('returns parsed aliases from existing file', () => {
+    const tmpDir = makeTempDir();
+    const filePath = resolveAliasFilePath(tmpDir);
+    fs.writeFileSync(filePath, JSON.stringify({ api: 'src/pages/api', auth: 'src/pages/api/auth' }));
+    const result = loadAliases(tmpDir);
+    expect(result).toEqual({ api: 'src/pages/api', auth: 'src/pages/api/auth' });
+    fs.rmSync(tmpDir, { recursive: true });
   });
 
-  it("returns empty object when alias file does not exist", () => {
-    const aliases = loadAliases(tmpDir);
-    expect(aliases).toEqual({});
-  });
-
-  it("returns parsed aliases when file exists", () => {
-    const aliasFile = resolveAliasFilePath(tmpDir);
-    fs.writeFileSync(aliasFile, JSON.stringify({ users: "api/users" }), "utf-8");
-    const aliases = loadAliases(tmpDir);
-    expect(aliases).toEqual({ users: "api/users" });
-  });
-});
-
-describe("saveAliases", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = makeTempDir();
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("writes aliases to file as formatted JSON", () => {
-    saveAliases(tmpDir, { posts: "api/posts" });
-    const aliasFile = resolveAliasFilePath(tmpDir);
-    const content = fs.readFileSync(aliasFile, "utf-8");
-    expect(JSON.parse(content)).toEqual({ posts: "api/posts" });
+  it('returns empty object if file contains invalid JSON', () => {
+    const tmpDir = makeTempDir();
+    const filePath = resolveAliasFilePath(tmpDir);
+    fs.writeFileSync(filePath, 'not-valid-json');
+    const result = loadAliases(tmpDir);
+    expect(result).toEqual({});
+    fs.rmSync(tmpDir, { recursive: true });
   });
 });
 
-describe("addAlias", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = makeTempDir();
+describe('saveAliases', () => {
+  it('writes aliases to the alias file', () => {
+    const tmpDir = makeTempDir();
+    saveAliases(tmpDir, { api: 'src/pages/api' });
+    const filePath = resolveAliasFilePath(tmpDir);
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    expect(JSON.parse(raw)).toEqual({ api: 'src/pages/api' });
+    fs.rmSync(tmpDir, { recursive: true });
   });
+});
 
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("adds a new alias and returns success result", () => {
-    const result = addAlias(tmpDir, "auth", "api/auth/login");
+describe('addAlias', () => {
+  it('adds a new alias and returns success', () => {
+    const tmpDir = makeTempDir();
+    const result = addAlias('api', 'src/pages/api', tmpDir);
     expect(result.success).toBe(true);
-    expect(result.alias).toBe("auth");
-    expect(result.target).toBe("api/auth/login");
+    expect(result.message).toContain('api');
     const aliases = loadAliases(tmpDir);
-    expect(aliases["auth"]).toBe("api/auth/login");
+    expect(aliases['api']).toBe('src/pages/api');
+    fs.rmSync(tmpDir, { recursive: true });
   });
 
-  it("returns failure if alias already exists", () => {
-    addAlias(tmpDir, "auth", "api/auth/login");
-    const result = addAlias(tmpDir, "auth", "api/auth/register");
+  it('returns failure if alias name is empty', () => {
+    const tmpDir = makeTempDir();
+    const result = addAlias('', 'src/pages/api', tmpDir);
     expect(result.success).toBe(false);
-    expect(result.error).toMatch(/already exists/i);
-  });
-});
-
-describe("resolveAlias", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = makeTempDir();
+    fs.rmSync(tmpDir, { recursive: true });
   });
 
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("returns the target path for a known alias", () => {
-    addAlias(tmpDir, "products", "api/products");
-    const target = resolveAlias(tmpDir, "products");
-    expect(target).toBe("api/products");
-  });
-
-  it("returns null for an unknown alias", () => {
-    const target = resolveAlias(tmpDir, "nonexistent");
-    expect(target).toBeNull();
-  });
-});
-
-describe("removeAlias", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = makeTempDir();
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("removes an existing alias and returns success", () => {
-    addAlias(tmpDir, "orders", "api/orders");
-    const result = removeAlias(tmpDir, "orders");
+  it('overwrites an existing alias', () => {
+    const tmpDir = makeTempDir();
+    addAlias('api', 'src/pages/api', tmpDir);
+    const result = addAlias('api', 'src/app/api', tmpDir);
     expect(result.success).toBe(true);
-    expect(resolveAlias(tmpDir, "orders")).toBeNull();
+    const aliases = loadAliases(tmpDir);
+    expect(aliases['api']).toBe('src/app/api');
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+});
+
+describe('resolveAlias', () => {
+  it('returns the path for a known alias', () => {
+    const tmpDir = makeTempDir();
+    addAlias('auth', 'src/pages/api/auth', tmpDir);
+    const result = resolveAlias('auth', tmpDir);
+    expect(result).toBe('src/pages/api/auth');
+    fs.rmSync(tmpDir, { recursive: true });
   });
 
-  it("returns failure when alias does not exist", () => {
-    const result = removeAlias(tmpDir, "ghost");
+  it('returns null for an unknown alias', () => {
+    const tmpDir = makeTempDir();
+    const result = resolveAlias('unknown', tmpDir);
+    expect(result).toBeNull();
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+});
+
+describe('removeAlias', () => {
+  it('removes an existing alias and returns success', () => {
+    const tmpDir = makeTempDir();
+    addAlias('api', 'src/pages/api', tmpDir);
+    const result = removeAlias('api', tmpDir);
+    expect(result.success).toBe(true);
+    const aliases = loadAliases(tmpDir);
+    expect(aliases['api']).toBeUndefined();
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it('returns failure when alias does not exist', () => {
+    const tmpDir = makeTempDir();
+    const result = removeAlias('nonexistent', tmpDir);
     expect(result.success).toBe(false);
-    expect(result.error).toMatch(/not found/i);
+    expect(result.message).toContain('nonexistent');
+    fs.rmSync(tmpDir, { recursive: true });
   });
 });
