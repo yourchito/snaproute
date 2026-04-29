@@ -1,89 +1,147 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 import {
+  resolveAliasFilePath,
+  loadAliases,
+  saveAliases,
   addAlias,
   resolveAlias,
   removeAlias,
-  loadAliases,
-  resolveAliasFilePath,
 } from "./aliasRoute";
 
 function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "snaproute-alias-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "snaproute-alias-test-"));
 }
 
 describe("resolveAliasFilePath", () => {
-  it("returns correct path inside outputDir", () => {
+  it("returns a path ending in .snaproute-aliases.json", () => {
     const result = resolveAliasFilePath("/some/dir");
-    expect(result).toBe("/some/dir/.snaproute-aliases.json");
+    expect(result).toMatch(/\.snaproute-aliases\.json$/);
+  });
+
+  it("resolves relative to provided base dir", () => {
+    const result = resolveAliasFilePath("/my/project");
+    expect(result).toBe("/my/project/.snaproute-aliases.json");
+  });
+});
+
+describe("loadAliases", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("returns empty object when alias file does not exist", () => {
+    const aliases = loadAliases(tmpDir);
+    expect(aliases).toEqual({});
+  });
+
+  it("returns parsed aliases when file exists", () => {
+    const aliasFile = resolveAliasFilePath(tmpDir);
+    fs.writeFileSync(aliasFile, JSON.stringify({ users: "api/users" }), "utf-8");
+    const aliases = loadAliases(tmpDir);
+    expect(aliases).toEqual({ users: "api/users" });
+  });
+});
+
+describe("saveAliases", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("writes aliases to file as formatted JSON", () => {
+    saveAliases(tmpDir, { posts: "api/posts" });
+    const aliasFile = resolveAliasFilePath(tmpDir);
+    const content = fs.readFileSync(aliasFile, "utf-8");
+    expect(JSON.parse(content)).toEqual({ posts: "api/posts" });
   });
 });
 
 describe("addAlias", () => {
-  it("adds a valid alias successfully", () => {
-    const dir = makeTempDir();
-    const result = addAlias("my-alias", "users/profile", dir);
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("adds a new alias and returns success result", () => {
+    const result = addAlias(tmpDir, "auth", "api/auth/login");
     expect(result.success).toBe(true);
-    expect(result.alias).toBe("my-alias");
-    expect(result.routeName).toBe("users/profile");
-    expect(result.resolvedPath).toContain("users/profile");
+    expect(result.alias).toBe("auth");
+    expect(result.target).toBe("api/auth/login");
+    const aliases = loadAliases(tmpDir);
+    expect(aliases["auth"]).toBe("api/auth/login");
   });
 
-  it("rejects invalid alias characters", () => {
-    const dir = makeTempDir();
-    const result = addAlias("my alias!", "users", dir);
+  it("returns failure if alias already exists", () => {
+    addAlias(tmpDir, "auth", "api/auth/login");
+    const result = addAlias(tmpDir, "auth", "api/auth/register");
     expect(result.success).toBe(false);
-    expect(result.error).toMatch(/Invalid alias/);
-  });
-
-  it("rejects duplicate alias", () => {
-    const dir = makeTempDir();
-    addAlias("dup", "route-a", dir);
-    const result = addAlias("dup", "route-b", dir);
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/already exists/);
-  });
-
-  it("persists alias to file", () => {
-    const dir = makeTempDir();
-    addAlias("saved", "orders", dir);
-    const entries = loadAliases(dir);
-    expect(entries).toHaveLength(1);
-    expect(entries[0].alias).toBe("saved");
-    expect(entries[0].routeName).toBe("orders");
+    expect(result.error).toMatch(/already exists/i);
   });
 });
 
 describe("resolveAlias", () => {
-  it("returns matching alias entry", () => {
-    const dir = makeTempDir();
-    addAlias("find-me", "products", dir);
-    const entry = resolveAlias("find-me", dir);
-    expect(entry).toBeDefined();
-    expect(entry?.routeName).toBe("products");
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
   });
 
-  it("returns undefined for unknown alias", () => {
-    const dir = makeTempDir();
-    const entry = resolveAlias("ghost", dir);
-    expect(entry).toBeUndefined();
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("returns the target path for a known alias", () => {
+    addAlias(tmpDir, "products", "api/products");
+    const target = resolveAlias(tmpDir, "products");
+    expect(target).toBe("api/products");
+  });
+
+  it("returns null for an unknown alias", () => {
+    const target = resolveAlias(tmpDir, "nonexistent");
+    expect(target).toBeNull();
   });
 });
 
 describe("removeAlias", () => {
-  it("removes an existing alias", () => {
-    const dir = makeTempDir();
-    addAlias("to-remove", "items", dir);
-    const removed = removeAlias("to-remove", dir);
-    expect(removed).toBe(true);
-    expect(loadAliases(dir)).toHaveLength(0);
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
   });
 
-  it("returns false when alias does not exist", () => {
-    const dir = makeTempDir();
-    const removed = removeAlias("nonexistent", dir);
-    expect(removed).toBe(false);
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("removes an existing alias and returns success", () => {
+    addAlias(tmpDir, "orders", "api/orders");
+    const result = removeAlias(tmpDir, "orders");
+    expect(result.success).toBe(true);
+    expect(resolveAlias(tmpDir, "orders")).toBeNull();
+  });
+
+  it("returns failure when alias does not exist", () => {
+    const result = removeAlias(tmpDir, "ghost");
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not found/i);
   });
 });
