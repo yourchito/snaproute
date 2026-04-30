@@ -31,6 +31,9 @@ export function validateRouteName(name: string): ValidationResult {
     if (segment === ".") {
       errors.push("Route segments must not be '.'.");
     }
+    if (segment === "..") {
+      errors.push("Route segments must not be '..' (path traversal is not allowed).");
+    }
   }
 
   return { valid: errors.length === 0, errors };
