@@ -52,4 +52,11 @@ describe("previewRoute", () => {
     const result = previewRoute(baseInput, configNoDir);
     expect(result.routePath).toBe("src/pages/api/users.ts");
   });
+
+  it("includes all specified methods in templateContent", () => {
+    const result = previewRoute(baseInput, baseConfig);
+    for (const method of baseInput.methods) {
+      expect(result.templateContent).toContain(method);
+    }
+  });
 });
