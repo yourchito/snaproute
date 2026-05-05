@@ -6,6 +6,7 @@ const RED = "\x1b[31m";
 const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";
 const CYAN = "\x1b[36m";
+const YELLOW = "\x1b[33m";
 
 function colorLine(line: DiffLine): string {
   switch (line.type) {
@@ -48,5 +49,6 @@ export function printDiffSummary(results: DiffResult[]): void {
   const totalAdded = results.reduce((s, r) => s + r.addedCount, 0);
   const totalRemoved = results.reduce((s, r) => s + r.removedCount, 0);
   const newFiles = results.filter((r) => !r.exists).length;
-  console.log(`${BOLD}Diff summary:${RESET} ${results.length} file(s) — ${newFiles} new, +${totalAdded}/-${totalRemoved} lines`);
+  const modifiedFiles = results.filter((r) => r.exists).length;
+  console.log(`${BOLD}Diff summary:${RESET} ${results.length} file(s) — ${CYAN}${newFiles} new${RESET}, ${YELLOW}${modifiedFiles} modified${RESET}, ${GREEN}+${totalAdded}${RESET}/${RED}-${totalRemoved}${RESET} lines`);
 }
