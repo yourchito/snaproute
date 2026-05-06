@@ -13,6 +13,16 @@ function writeRoute(dir: string, name: string, content: string): void {
   fs.writeFileSync(full, content, "utf-8");
 }
 
+/** Returns a minimal valid route file content string for use in tests. */
+function makeCleanRoute(): string {
+  return [
+    "import { NextApiRequest, NextApiResponse } from 'next';",
+    "export default function handler(req: NextApiRequest, res: NextApiResponse) {",
+    "  if (req.method === 'GET') res.status(200).json({});",
+    "}",
+  ].join("\n");
+}
+
 describe("auditRoutes", () => {
   it("returns empty result for missing directory", () => {
     const result = auditRoutes("/nonexistent/path/xyz");
@@ -52,13 +62,7 @@ describe("auditRoutes", () => {
 
   it("passes a clean route with no issues", () => {
     const dir = makeTempDir();
-    const content = [
-      "import { NextApiRequest, NextApiResponse } from 'next';",
-      "export default function handler(req: NextApiRequest, res: NextApiResponse) {",
-      "  if (req.method === 'GET') res.status(200).json({});",
-      "}",
-    ].join("\n");
-    writeRoute(dir, "clean.ts", content);
+    writeRoute(dir, "clean.ts", makeCleanRoute());
     const result = auditRoutes(dir);
     const entry = result.entries.find((e) => e.route === "clean");
     expect(entry!.issues.filter((i) => i.severity === "error")).toHaveLength(0);
@@ -71,5 +75,14 @@ describe("auditRoutes", () => {
     const result = auditRoutes(dir);
     expect(result.totalRoutes).toBe(2);
     expect(result.errorCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it("handles nested route paths correctly", () => {
+    const dir = makeTempDir();
+    writeRoute(dir, "users/[id].ts", makeCleanRoute());
+    const result = auditRoutes(dir);
+    const entry = result.entries.find((e) => e.route === "users/[id]");
+    expect(entry).toBeDefined();
+    expect(entry!.issues.filter((i) => i.severity === "error")).toHaveLength(0);
   });
 });
