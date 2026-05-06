@@ -38,6 +38,21 @@ describe("extractMethodsFromContent", () => {
   it("returns empty array for empty content", () => {
     expect(extractMethodsFromContent("")).toEqual([]);
   });
+
+  it("extracts all supported HTTP methods", () => {
+    const content = `
+      export function GET() {}
+      export function POST() {}
+      export function PUT() {}
+      export function PATCH() {}
+      export function DELETE() {}
+      export function HEAD() {}
+      export function OPTIONS() {}
+    `;
+    expect(extractMethodsFromContent(content)).toEqual(
+      ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+    );
+  });
 });
 
 describe("parseRoutesFromDir", () => {
