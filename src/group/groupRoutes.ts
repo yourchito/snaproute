@@ -71,3 +71,28 @@ export function listAllGroups(outputDir: string): RouteGroup[] {
   const groups = loadGroups(outputDir);
   return Object.entries(groups).map(([name, routes]) => ({ name, routes }));
 }
+
+/**
+ * Renames a group, preserving all routes assigned to it.
+ * Returns a result object indicating success or the reason for failure.
+ */
+export function renameGroup(
+  outputDir: string,
+  oldName: string,
+  newName: string
+): { success: boolean; message: string } {
+  if (oldName === newName) {
+    return { success: false, message: `New group name is the same as the old name.` };
+  }
+  const groups = loadGroups(outputDir);
+  if (!groups[oldName]) {
+    return { success: false, message: `Group "${oldName}" does not exist.` };
+  }
+  if (groups[newName]) {
+    return { success: false, message: `Group "${newName}" already exists.` };
+  }
+  groups[newName] = groups[oldName];
+  delete groups[oldName];
+  saveGroups(outputDir, groups);
+  return { success: true, message: `Group "${oldName}" renamed to "${newName}".` };
+}
