@@ -1,51 +1,54 @@
 import { TemplateEntry } from "./listTemplates";
 
-const CYAN = (s: string) => `\x1b[36m${s}\x1b[0m`;
-const GREEN = (s: string) => `\x1b[32m${s}\x1b[0m`;
-const YELLOW = (s: string) => `\x1b[33m${s}\x1b[0m`;
-const DIM = (s: string) => `\x1b[2m${s}\x1b[0m`;
-const BOLD = (s: string) => `\x1b[1m${s}\x1b[0m`;
-
-export function printTemplateEntry(entry: TemplateEntry, isCustom = false): void {
-  const label = isCustom ? YELLOW("[custom]") : GREEN("[builtin]");
-  const methods = entry.methods.length
-    ? entry.methods.map((m) => CYAN(m)).join(", ")
-    : DIM("(none)");
-  const flags = [
-    entry.hasAuth ? GREEN("auth") : "",
-    entry.hasValidation ? GREEN("validation") : "",
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  console.log(`  ${BOLD(entry.name)} ${label}`);
-  console.log(`    ${DIM(entry.description)}`);
-  console.log(`    Methods: ${methods}${flags ? `  Flags: ${flags}` : ""}`);
-  console.log();
+function c(text: string, color: string): string {
+  const codes: Record<string, string> = {
+    cyan: "\x1b[36m",
+    green: "\x1b[32m",
+    yellow: "\x1b[33m",
+    red: "\x1b[31m",
+    gray: "\x1b[90m",
+    bold: "\x1b[1m",
+    reset: "\x1b[0m",
+  };
+  return `${codes[color] ?? ""}${text}${codes.reset}`;
 }
 
-export function printTemplateList(
-  entries: TemplateEntry[],
-  customNames: Set<string> = new Set()
-): void {
+export function printTemplateEntry(entry: TemplateEntry): void {
+  const tag = entry.builtin ? c("[builtin]", "gray") : c("[custom]", "cyan");
+  const name = c(entry.name, "bold");
+  console.log(`  ${tag} ${name}`);
+  if (entry.description) {
+    console.log(`         ${c(entry.description, "gray")}`);
+  }
+  console.log(`         ${c(entry.path, "gray")}`);
+}
+
+export function printTemplateList(entries: TemplateEntry[]): void {
   if (entries.length === 0) {
-    console.log(DIM("  No templates found."));
+    console.log(c("No templates found.", "yellow"));
     return;
   }
 
-  console.log(BOLD("\nAvailable templates:\n"));
-  for (const entry of entries) {
-    printTemplateEntry(entry, customNames.has(entry.name));
+  const builtins = entries.filter((e) => e.builtin);
+  const customs = entries.filter((e) => !e.builtin);
+
+  if (builtins.length > 0) {
+    console.log(c("\nBuiltin Templates:", "bold"));
+    builtins.forEach(printTemplateEntry);
+  }
+
+  if (customs.length > 0) {
+    console.log(c("\nCustom Templates:", "bold"));
+    customs.forEach(printTemplateEntry);
   }
 }
 
 export function printTemplateSummary(entries: TemplateEntry[]): void {
-  const builtin = entries.filter(
-    (e) =>
-      !["custom"].includes(e.description.startsWith("Custom") ? "custom" : "")
-  ).length;
-  const total = entries.length;
+  const builtinCount = entries.filter((e) => e.builtin).length;
+  const customCount = entries.filter((e) => !e.builtin).length;
   console.log(
-    DIM(`  ${total} template${total !== 1 ? "s" : ""} available (${builtin} builtin, ${total - builtin} custom)\n`)
+    `\n${c(String(entries.length), "cyan")} template(s) found — ` +
+      `${c(String(builtinCount), "gray")} builtin, ` +
+      `${c(String(customCount), "cyan")} custom`
   );
 }
