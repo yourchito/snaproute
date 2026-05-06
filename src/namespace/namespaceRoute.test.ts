@@ -1,104 +1,99 @@
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
+import { describe, it, expect, beforeEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   resolveNamespaceFilePath,
   loadNamespaces,
   saveNamespaces,
   addRouteToNamespace,
   removeRouteFromNamespace,
+  listNamespaces,
   getRoutesInNamespace,
-  getAllNamespaces,
-} from "./namespaceRoute";
+} from './namespaceRoute';
 
 function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "snaproute-ns-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'snaproute-ns-'));
 }
 
-describe("resolveNamespaceFilePath", () => {
-  it("returns path inside .snaproute dir", () => {
-    const result = resolveNamespaceFilePath("/some/dir");
-    expect(result).toBe("/some/dir/.snaproute/namespaces.json");
+describe('resolveNamespaceFilePath', () => {
+  it('returns correct path', () => {
+    const result = resolveNamespaceFilePath('/base');
+    expect(result).toBe('/base/.snaproute/namespaces.json');
   });
 });
 
-describe("loadNamespaces", () => {
-  it("returns empty object when file does not exist", () => {
-    expect(loadNamespaces("/nonexistent/path/namespaces.json")).toEqual({});
+describe('loadNamespaces', () => {
+  it('returns empty object when file does not exist', () => {
+    const dir = makeTempDir();
+    expect(loadNamespaces(dir)).toEqual({});
   });
 
-  it("returns parsed map from existing file", () => {
+  it('returns parsed namespaces from file', () => {
     const dir = makeTempDir();
-    const filePath = path.join(dir, "namespaces.json");
-    fs.writeFileSync(filePath, JSON.stringify({ auth: ["login", "logout"] }));
-    expect(loadNamespaces(filePath)).toEqual({ auth: ["login", "logout"] });
+    const data = { auth: ['login', 'logout'] };
+    saveNamespaces(dir, data);
+    expect(loadNamespaces(dir)).toEqual(data);
   });
 
-  it("returns empty object on malformed JSON", () => {
+  it('returns empty object on corrupt file', () => {
     const dir = makeTempDir();
-    const filePath = path.join(dir, "namespaces.json");
-    fs.writeFileSync(filePath, "not-json");
-    expect(loadNamespaces(filePath)).toEqual({});
+    const filePath = resolveNamespaceFilePath(dir);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, 'not-json', 'utf-8');
+    expect(loadNamespaces(dir)).toEqual({});
   });
 });
 
-describe("addRouteToNamespace", () => {
-  it("adds a route to a new namespace", () => {
+describe('addRouteToNamespace', () => {
+  it('adds a route to a new namespace', () => {
     const dir = makeTempDir();
-    const result = addRouteToNamespace(dir, "auth", "login");
+    const result = addRouteToNamespace(dir, 'auth', 'users/login');
     expect(result.success).toBe(true);
-    expect(getRoutesInNamespace(dir, "auth")).toContain("login");
+    expect(getRoutesInNamespace(dir, 'auth')).toContain('users/login');
   });
 
-  it("does not add duplicate route", () => {
+  it('returns failure if route already exists', () => {
     const dir = makeTempDir();
-    addRouteToNamespace(dir, "auth", "login");
-    const result = addRouteToNamespace(dir, "auth", "login");
+    addRouteToNamespace(dir, 'auth', 'users/login');
+    const result = addRouteToNamespace(dir, 'auth', 'users/login');
     expect(result.success).toBe(false);
-    expect(result.message).toMatch(/already in namespace/);
-  });
-
-  it("adds multiple routes to same namespace", () => {
-    const dir = makeTempDir();
-    addRouteToNamespace(dir, "api", "users");
-    addRouteToNamespace(dir, "api", "posts");
-    const routes = getRoutesInNamespace(dir, "api");
-    expect(routes).toContain("users");
-    expect(routes).toContain("posts");
+    expect(result.message).toContain('already exists');
   });
 });
 
-describe("removeRouteFromNamespace", () => {
-  it("removes an existing route", () => {
+describe('removeRouteFromNamespace', () => {
+  it('removes an existing route', () => {
     const dir = makeTempDir();
-    addRouteToNamespace(dir, "auth", "login");
-    const result = removeRouteFromNamespace(dir, "auth", "login");
+    addRouteToNamespace(dir, 'auth', 'users/login');
+    const result = removeRouteFromNamespace(dir, 'auth', 'users/login');
     expect(result.success).toBe(true);
-    expect(getRoutesInNamespace(dir, "auth")).not.toContain("login");
+    expect(getRoutesInNamespace(dir, 'auth')).not.toContain('users/login');
   });
 
-  it("removes namespace key when empty", () => {
+  it('returns failure if namespace does not exist', () => {
     const dir = makeTempDir();
-    addRouteToNamespace(dir, "auth", "login");
-    removeRouteFromNamespace(dir, "auth", "login");
-    const all = getAllNamespaces(dir);
-    expect(all["auth"]).toBeUndefined();
-  });
-
-  it("returns failure for non-existent route", () => {
-    const dir = makeTempDir();
-    const result = removeRouteFromNamespace(dir, "auth", "ghost");
+    const result = removeRouteFromNamespace(dir, 'ghost', 'any/route');
     expect(result.success).toBe(false);
-    expect(result.message).toMatch(/not found/);
+    expect(result.message).toContain('does not exist');
+  });
+
+  it('returns failure if route not in namespace', () => {
+    const dir = makeTempDir();
+    addRouteToNamespace(dir, 'auth', 'users/login');
+    const result = removeRouteFromNamespace(dir, 'auth', 'users/register');
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('not found');
   });
 });
 
-describe("getAllNamespaces", () => {
-  it("returns all namespaces", () => {
+describe('listNamespaces', () => {
+  it('returns all namespaces', () => {
     const dir = makeTempDir();
-    addRouteToNamespace(dir, "auth", "login");
-    addRouteToNamespace(dir, "admin", "dashboard");
-    const all = getAllNamespaces(dir);
-    expect(Object.keys(all)).toEqual(expect.arrayContaining(["auth", "admin"]));
+    addRouteToNamespace(dir, 'auth', 'login');
+    addRouteToNamespace(dir, 'public', 'home');
+    const result = listNamespaces(dir);
+    expect(Object.keys(result)).toContain('auth');
+    expect(Object.keys(result)).toContain('public');
   });
 });

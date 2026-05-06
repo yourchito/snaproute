@@ -1,75 +1,68 @@
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from 'fs';
+import * as path from 'path';
 
-export interface NamespaceEntry {
-  route: string;
-  namespace: string;
-  addedAt: string;
+export type NamespaceMap = Record<string, string[]>;
+
+export function resolveNamespaceFilePath(baseDir: string): string {
+  return path.join(baseDir, '.snaproute', 'namespaces.json');
 }
 
-export interface NamespaceMap {
-  [namespace: string]: string[];
-}
-
-export function resolveNamespaceFilePath(outputDir: string): string {
-  return path.join(outputDir, ".snaproute", "namespaces.json");
-}
-
-export function loadNamespaces(filePath: string): NamespaceMap {
+export function loadNamespaces(baseDir: string): NamespaceMap {
+  const filePath = resolveNamespaceFilePath(baseDir);
   if (!fs.existsSync(filePath)) return {};
   try {
-    const raw = fs.readFileSync(filePath, "utf-8");
+    const raw = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(raw) as NamespaceMap;
   } catch {
     return {};
   }
 }
 
-export function saveNamespaces(filePath: string, map: NamespaceMap): void {
+export function saveNamespaces(baseDir: string, namespaces: NamespaceMap): void {
+  const filePath = resolveNamespaceFilePath(baseDir);
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(map, null, 2), "utf-8");
+  fs.writeFileSync(filePath, JSON.stringify(namespaces, null, 2), 'utf-8');
 }
 
 export function addRouteToNamespace(
-  outputDir: string,
+  baseDir: string,
   namespace: string,
   route: string
 ): { success: boolean; message: string } {
-  const filePath = resolveNamespaceFilePath(outputDir);
-  const map = loadNamespaces(filePath);
-  if (!map[namespace]) map[namespace] = [];
-  if (map[namespace].includes(route)) {
-    return { success: false, message: `Route "${route}" is already in namespace "${namespace}".` };
+  const namespaces = loadNamespaces(baseDir);
+  if (!namespaces[namespace]) namespaces[namespace] = [];
+  if (namespaces[namespace].includes(route)) {
+    return { success: false, message: `Route "${route}" already exists in namespace "${namespace}".` };
   }
-  map[namespace].push(route);
-  saveNamespaces(filePath, map);
+  namespaces[namespace].push(route);
+  saveNamespaces(baseDir, namespaces);
   return { success: true, message: `Route "${route}" added to namespace "${namespace}".` };
 }
 
 export function removeRouteFromNamespace(
-  outputDir: string,
+  baseDir: string,
   namespace: string,
   route: string
 ): { success: boolean; message: string } {
-  const filePath = resolveNamespaceFilePath(outputDir);
-  const map = loadNamespaces(filePath);
-  if (!map[namespace] || !map[namespace].includes(route)) {
+  const namespaces = loadNamespaces(baseDir);
+  if (!namespaces[namespace]) {
+    return { success: false, message: `Namespace "${namespace}" does not exist.` };
+  }
+  const idx = namespaces[namespace].indexOf(route);
+  if (idx === -1) {
     return { success: false, message: `Route "${route}" not found in namespace "${namespace}".` };
   }
-  map[namespace] = map[namespace].filter((r) => r !== route);
-  if (map[namespace].length === 0) delete map[namespace];
-  saveNamespaces(filePath, map);
+  namespaces[namespace].splice(idx, 1);
+  saveNamespaces(baseDir, namespaces);
   return { success: true, message: `Route "${route}" removed from namespace "${namespace}".` };
 }
 
-export function getRoutesInNamespace(outputDir: string, namespace: string): string[] {
-  const filePath = resolveNamespaceFilePath(outputDir);
-  const map = loadNamespaces(filePath);
-  return map[namespace] ?? [];
+export function listNamespaces(baseDir: string): NamespaceMap {
+  return loadNamespaces(baseDir);
 }
 
-export function getAllNamespaces(outputDir: string): NamespaceMap {
-  const filePath = resolveNamespaceFilePath(outputDir);
-  return loadNamespaces(filePath);
+export function getRoutesInNamespace(baseDir: string, namespace: string): string[] {
+  const namespaces = loadNamespaces(baseDir);
+  return namespaces[namespace] ?? [];
 }
