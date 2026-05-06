@@ -9,6 +9,15 @@ export interface WriteRouteResult {
   skipped: boolean;
 }
 
+/**
+ * Writes a route file to disk based on the provided options and config.
+ * If the file already exists and `overwrite` is false, the write is skipped.
+ *
+ * @param options - Template options for the route (e.g. route name, methods)
+ * @param config - Partial SnapRoute configuration (e.g. routesDir)
+ * @param overwrite - Whether to overwrite an existing route file (default: false)
+ * @returns A result object indicating whether the file was created or skipped
+ */
 export async function writeRoute(
   options: RouteTemplateOptions,
   config: Partial<SnapRouteConfig>,
@@ -24,12 +33,27 @@ export async function writeRoute(
 
   const content = generateRouteTemplate(options, config);
 
-  fs.mkdirSync(routeDir, { recursive: true });
-  fs.writeFileSync(filePath, content, 'utf-8');
+  try {
+    fs.mkdirSync(routeDir, { recursive: true });
+    fs.writeFileSync(filePath, content, 'utf-8');
+  } catch (err) {
+    throw new Error(
+      `Failed to write route file at "${filePath}": ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
 
   return { filePath, created: true, skipped: false };
 }
 
+/**
+ * Resolves the absolute file path for a given route name and config.
+ *
+ * @param routeName - The name/segment of the route (e.g. "users/[id]")
+ * @param config - Partial SnapRoute configuration (e.g. routesDir)
+ * @returns The absolute path to the route.ts file
+ */
 export function resolveRoutePath(
   routeName: string,
   config: Partial<SnapRouteConfig>
