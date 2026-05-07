@@ -52,3 +52,14 @@ export function printTemplateSummary(entries: TemplateEntry[]): void {
       `${c(String(customCount), "cyan")} custom`
   );
 }
+
+/**
+ * Prints a single-line notification when a template is successfully applied.
+ * @param templateName - The name of the template that was applied.
+ * @param destination - The destination path where the template was applied.
+ */
+export function printTemplateApplied(templateName: string, destination: string): void {
+  console.log(
+    `${c("✔", "green")} Template ${c(templateName, "bold")} applied to ${c(destination, "cyan")}`
+  );
+}
